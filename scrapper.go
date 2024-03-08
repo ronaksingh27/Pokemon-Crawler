@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"os"
+	"time"
+	"unicode"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -21,36 +24,140 @@ func contains(s []string, str string) bool {
 	return false
 }
 
-var pokemonProducts []PokemonProduct
+func countWhitespace(s string) int {
+	count := 0
+	for _, char := range s {
+		if unicode.IsSpace(char) {
+			count++
+		}
+	}
+	return count
+}
+
+var(
+	 pokemonProducts []PokemonProduct
+	 limit int
+	//  pagesToScrape  []string
+
+	 lastRequestTime map[string]time.Time
+)
+
+var pagesToScrape = []string{ 
+	"https://scrapeme.live/shop/page/1/", 
+	"https://scrapeme.live/shop/page/2/", 
+	"https://scrapeme.live/shop/page/3/", 
+	"https://scrapeme.live/shop/page/4/", 
+	"https://scrapeme.live/shop/page/5/", 
+	"https://scrapeme.live/shop/page/6/", 
+	"https://scrapeme.live/shop/page/7/", 
+	"https://scrapeme.live/shop/page/8/", 
+	"https://scrapeme.live/shop/page/9/", 
+	"https://scrapeme.live/shop/page/10/", 
+ 
+}
 
 
 func main() {
 	
 	// Instantiate default collector
-	c := colly.NewCollector()
-	i := 1
-	limit := 5
+	c := colly.NewCollector( 
+		colly.Async(true),
+	)
+	// i := 1
 
-	var pagesToScrape []string
+	var startUrl string
+	var customSelector string
+	var autopaginate bool
+	var linkSelector string
+	var paginationPattern string
+
+	//define CLI flags
+	flag.StringVar(&startUrl,"url","","starting web crawler URL")
+	flag.StringVar(&customSelector,"selector","","Use to select custom CSS element")
+	flag.IntVar(&limit,"limit",0,"maximum pages to crawl")
 	
-	pageToScrape := "https://scrapeme.live/shop/page/1"
+	//auto pagginate , link-selector
+	flag.StringVar(&paginationPattern, "pagination", "", "Pagination URL pattern (e.g., https://example.com/page/%d)")
+	flag.BoolVar(&autopaginate,"autopaginate",false,"use regexp to autopaginate")
+	flag.StringVar(&linkSelector,"linkSelector","","use to add links to pages to Scrape")
+
+
+	//PArse CLI flags
+	flag.Parse()
 
 	// initializing the list of pages discovered with a pageToScrape 
-	pagesDiscovered := []string{ pageToScrape } 
+	// pagesDiscovered  := []string{ startUrl } 
+	
+	// // Print defined flags and their values
+	// fmt.Println("Defined flags and their values:")
+	// fmt.Printf("startUrl: %v\n", startUrl)
+	// fmt.Printf("customSelector: %v\n", customSelector)
+	// fmt.Printf("limit: %v\n", limit)
+	// fmt.Printf("paginationPattern: %v\n", paginationPattern)
+	// fmt.Printf("autopaginate: %v\n", autopaginate)
+	// fmt.Printf("linkSelector: %v\n", linkSelector)
 
-	c.OnHTML("a.page-numbers" , func( e *colly.HTMLElement){
-		newPaginationLink := e.Attr("href")
 
-		if !contains(pagesToScrape,newPaginationLink){
-			pagesToScrape = append(pagesToScrape,newPaginationLink)
-		}
+	// registering all pages to scrape 
+	for _, pageToScrape := range pagesToScrape { 
+		c.Visit(pageToScrape) 
+	} 
 
-		pagesDiscovered = append(pagesDiscovered, newPaginationLink)
+	// if autopaginate && paginationPattern != ""{
 
-	})
+
+	// 	lastRequestTime = make( map[string]time.Time )
+
+	// 	// fmt.Println("Link-Selector : ",linkSelector)
+	// 	c.OnHTML(linkSelector , func( e *colly.HTMLElement){
+	// 		newPaginationLink := e.Attr("href")
+
+	// 		//MATCHING STRINGS HERE 
+	// 		// fmt.Println("Matching Stirngs here baby")
+	// 		match , err := regexp.MatchString(paginationPattern,newPaginationLink)
+	// 		if err != nil{
+	// 			log.Fatal("Error in matching strings")
+	// 		}
+			
+	// 		newPaginationLink = strings.TrimSpace(newPaginationLink)
+	// 		paginationPattern = strings.TrimSpace(paginationPattern)
+			
+	// 		// fmt.Printf("newPaginationLink: %v\n", newPaginationLink)
+	// 		// fmt.Printf("Pagination Pattern: %v\n", paginationPattern)
+	// 		// fmt.Println("Match : ",match)
+		
+	// 		if match{
+	// 			// fmt.Println("INSIDE PAGES")
+	// 			if !contains(pagesToScrape,newPaginationLink){
+	// 				// fmt.Println("NEW PAGE FOUND")
+	// 				pagesToScrape = append(pagesToScrape,newPaginationLink)
+
+	// 				// for _ , page := range pagesToScrape{
+	// 				// 	fmt.Printf("url : %v\n",page)
+	// 				// }
+	// 			}
+
+	// 			pagesDiscovered = append(pagesDiscovered, newPaginationLink)
+	// 		}
+
+	// 	})
+	// }
+
+	// c.OnHTML("a.page-numbers" , func( e *colly.HTMLElement){
+	// 	newPaginationLink := e.Attr("href")
+	// 	// fmt.Println("INSIDE PAGES")
+	// 	if !contains(pagesToScrape,newPaginationLink){
+	// 		// fmt.Println("NEW PAGE FOUND")
+	// 		pagesToScrape = append(pagesToScrape,newPaginationLink)
+	// 		// for _ , page := range pagesToScrape{
+	// 		// 	fmt.Printf("url : %v\n",page)
+	// 		// }
+	// 	}
+	// 	pagesDiscovered = append(pagesDiscovered, newPaginationLink)
+	// })
  	
 
-	c.OnHTML( "li.product" , func(e *colly.HTMLElement){
+	c.OnHTML("li.product" , func(e *colly.HTMLElement){
 		// Extract data from the HTML elements
 		url := e.ChildAttr("a.woocommerce-LoopProduct-link", "href")
 		image := e.ChildAttr("img", "src")
@@ -66,28 +173,36 @@ func main() {
 		})
 	})
 
-	c.OnScraped( func(r *colly.Response){
-		if len(pagesToScrape) != 0 && i < limit {
+	// c.OnScraped( func(r *colly.Response){
+	// 	if len(pagesToScrape) != 0 && i < limit {
 			
-			pageToScrape = pagesToScrape[0]
-			pagesToScrape = pagesToScrape[1:]
+	// 		pageToScrape := pagesToScrape[0]
+	// 		pagesToScrape = pagesToScrape[1:]
+	// 		// fmt.Println("Page to scrape is : ",pageToScrape)
+	// 		i++
 
-			i++
-
-			c.Visit(pageToScrape)
-		}
-	})
+	// 		c.Visit(pageToScrape)
+	// 	}
+	// })
 
 	c.OnRequest( func( r *colly.Request){
 		fmt.Println("Visiting : ",r.URL.String())
 	})
 
-	// setting a valid User-Agent header 
-	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
+
 	
 	// downloading the target HTML page 
 	// visiting the first page 
-	c.Visit(pageToScrape) 
+	c.Visit(startUrl) 
+	
+	c.Limit(&colly.LimitRule{
+		Parallelism: 4,
+		DomainGlob: "*",
+		RandomDelay: 5*time.Second,
+	})
+
+	// wait for tColly to visit all pages 
+	c.Wait() 
 
 	for _, pokemonProduct := range pokemonProducts { 
 		// converting a PokemonProduct to an array of strings 
